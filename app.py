@@ -94,13 +94,16 @@ if st.session_state.ecuaciones:
 
 st.write("")
 
-# Lógica para formatear el texto exactamente como pide el POE
+# Lógica para formatear el texto exactamente como pide el POE (Estilo Windows)
 texto_final = ""
-for ec in st.session_state.ecuaciones:
-    texto_final += f"{ec['nombre']}\n"
+for i, ec in enumerate(st.session_state.ecuaciones):
+    texto_final += f"{ec['nombre']}\r\n"
     for var in ec['variables']:
-        texto_final += f"{var['peso']} {var['nombre']}\n"
-    texto_final += "\n"  # Renglón en blanco obligatorio entre ecuaciones
+        texto_final += f"{var['peso']} {var['nombre']}\r\n"
+    
+    # Agrega el renglón en blanco SOLO si no es la última ecuación de la lista
+    if i < len(st.session_state.ecuaciones) - 1:
+        texto_final += "\r\n"
 
 # Mostrar vista previa y botón de descarga si hay datos
 if texto_final:
