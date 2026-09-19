@@ -44,14 +44,20 @@ with st.form("formulario_variables", clear_on_submit=True):
             # Guarda la variable sin importar si ya existe (permite repeticiones)
             st.session_state.variables_actuales.append({"peso": peso, "nombre": nombre_var.strip()})
             st.success(f"Variable '{nombre_var.strip()}' agregada a la lista temporal.")
+            st.rerun() # Fuerza a recargar para mostrar la variable abajo inmediatamente
         else:
             st.warning("Debes ingresar un nombre para la variable.")
 
-# Mostrar las variables que se van agregando a la ecuación actual
+# Mostrar las variables que se van agregando a la ecuación actual y permitir borrarlas
 if st.session_state.variables_actuales:
-    st.info(f"**Variables listas para guardar en la ecuación:**")
-    for v in st.session_state.variables_actuales:
-        st.write(f"- Peso: {v['peso']} | Variable: {v['nombre']}")
+    st.info("**Variables listas para guardar en la ecuación:**")
+    for i, v in enumerate(st.session_state.variables_actuales):
+        colA, colB = st.columns([0.85, 0.15])
+        colA.write(f"- Peso: {v['peso']} | Variable: **{v['nombre']}**")
+        # Botón para borrar esta variable específica
+        if colB.button("❌ Borrar", key=f"del_var_{i}", help="Eliminar esta variable de la ecuación actual"):
+            st.session_state.variables_actuales.pop(i)
+            st.rerun()
 
 st.write("")
 # Botón para confirmar y guardar la ecuación completa en el sistema
@@ -72,6 +78,22 @@ if st.button("💾 Guardar Ecuación Completa"):
 st.write("---")
 st.subheader("2. Sistema Generado y Descarga")
 
+# Mostrar las ecuaciones guardadas y permitir borrarlas individualmente
+if st.session_state.ecuaciones:
+    st.write("**Ecuaciones confirmadas en el sistema:**")
+    for i, ec in enumerate(st.session_state.ecuaciones):
+        col_eq1, col_eq2 = st.columns([0.85, 0.15])
+        # Muestra el nombre de la ec y un resumen de sus variables
+        nombres_vars = ", ".join([v['nombre'] for v in ec['variables']])
+        col_eq1.write(f"**{ec['nombre']}** *(Variables: {nombres_vars})*")
+        
+        # Botón para borrar toda la ecuación
+        if col_eq2.button("❌ Borrar", key=f"del_eq_{i}", help="Eliminar esta ecuación completa del sistema"):
+            st.session_state.ecuaciones.pop(i)
+            st.rerun()
+
+st.write("")
+
 # Lógica para formatear el texto exactamente como pide el POE
 texto_final = ""
 for ec in st.session_state.ecuaciones:
@@ -91,7 +113,7 @@ if texto_final:
         mime="text/plain"
     )
 
-    if st.button("🗑️ Borrar todo e iniciar nuevo sistema"):
+    if st.button("🗑️ Borrar TODO e iniciar nuevo sistema"):
         st.session_state.ecuaciones = []
         st.session_state.variables_actuales = []
         st.rerun()
