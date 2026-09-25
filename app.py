@@ -21,7 +21,7 @@ st.write("Procesa ecuaciones automáticamente o cárgalas de forma manual. Edita
 st.write("---")
 
 # ==========================================
-# SECCIÓN 1: CARGA AUTOMÁTICA (NUEVO)
+# SECCIÓN 1: CARGA AUTOMÁTICA
 # ==========================================
 st.subheader("🤖 1. Carga Automática (Desde Texto)")
 st.info("Copia y pega tus ecuaciones y tus datos. El sistema cruzará la información y extraerá solo las incógnitas con peso 1 por defecto.")
@@ -34,7 +34,7 @@ with col_text2:
 
 if st.button("⚡ Procesar Texto Automáticamente"):
     if texto_eqs.strip():
-        # Extraer nombres de variables de los datos conocidos (letras seguidas de letras/números)
+        # Extraer nombres de variables de los datos conocidos
         datos_conocidos = set(re.findall(r'\b[A-Za-z][A-Za-z0-9_]*\b', texto_datos))
         
         lineas = texto_eqs.split('\n')
@@ -57,9 +57,9 @@ if st.button("⚡ Procesar Texto Automáticamente"):
             # CRUZAR: Restar los datos fijos para dejar solo las incógnitas reales
             incognitas = vars_en_linea - datos_conocidos
             
-            # CHECK DE INDEPENDENCIA BÁSICA: Si no hay incógnitas, la descarta.
+            # CHECK DE INDEPENDENCIA BÁSICA
             if not incognitas:
-                st.warning(f"⚠️ Ecuación ignorada: **{nombre_eq}**. No posee incógnitas libres (está completamente definida por los datos fijos).")
+                st.warning(f"⚠️ Ecuación ignorada: **{nombre_eq}**. No posee incógnitas libres.")
                 continue
             
             # Guardar la ecuación con las incógnitas resultantes a peso 1
@@ -78,7 +78,7 @@ if st.button("⚡ Procesar Texto Automáticamente"):
 st.write("---")
 
 # ==========================================
-# SECCIÓN 2: CARGA MANUAL (EXISTENTE)
+# SECCIÓN 2: CARGA MANUAL
 # ==========================================
 st.subheader("✍️ 2. Carga Manual")
 
@@ -131,22 +131,18 @@ st.subheader("⚙️ 3. Sistema Generado y Edición")
 if st.session_state.ecuaciones:
     st.write("**Panel de Control:** Aquí puedes cambiar el peso de cualquier variable o eliminar elementos.")
     
-    # Mostrar cada ecuación en un desplegable para mantenerlo ordenado
     for i, ec in enumerate(st.session_state.ecuaciones):
         with st.expander(f"📦 {ec['nombre']} (Ver/Editar Variables)"):
-            # Botón para borrar toda la ecuación
             if st.button(f"🗑️ Eliminar Ecuación Completa {ec['nombre']}", key=f"del_eq_{i}"):
                 st.session_state.ecuaciones.pop(i)
                 st.rerun()
             
             st.write("---")
-            # Iterar sobre las variables de esa ecuación
             for j, var in enumerate(ec['variables']):
                 col_var_name, col_var_peso, col_var_del = st.columns([0.4, 0.4, 0.2])
                 
                 col_var_name.write(f"**{var['nombre']}**")
                 
-                # Desplegable para editar el peso dinámicamente
                 nuevo_peso = col_var_peso.selectbox(
                     "Peso:", 
                     options=list(opciones_peso.keys()), 
@@ -155,36 +151,40 @@ if st.session_state.ecuaciones:
                     key=f"edit_peso_{i}_{j}"
                 )
                 
-                # Actualizar el peso en la base de datos de la sesión
                 if nuevo_peso != var['peso']:
                     st.session_state.ecuaciones[i]['variables'][j]['peso'] = nuevo_peso
                 
-                # Botón para borrar la variable de esta ecuación particular
                 if col_var_del.button("❌ Quitar", key=f"del_var_{i}_{j}"):
                     st.session_state.ecuaciones[i]['variables'].pop(j)
                     st.rerun()
 
 st.write("")
 
-# Lógica para formatear el texto a POE
-texto_final = ""
-for i, ec in enumerate(st.session_state.ecuaciones):
-    # Si la ecuación se quedó vacía porque le borraste todas las variables, se ignora
+# Lógica para formatear el texto a POE (USANDO SALTO DE LÍNEA ESTÁNDAR \n)
+lineas_finales = []
+for ec in st.session_state.ecuaciones:
     if not ec['variables']: continue
     
-    texto_final += f"{ec['nombre']}\r\n"
+    # Nombre de la ecuación
+    lineas_finales.append(ec['nombre'])
+    # Variables de la ecuación (formato: peso espacio nombre)
     for var in ec['variables']:
-        texto_final += f"{var['peso']} {var['nombre']}\r\n"
-    
-    if i < len(st.session_state.ecuaciones) - 1:
-        texto_final += "\r\n"
+        lineas_finales.append(f"{var['peso']} {var['nombre']}")
+    # Línea en blanco separadora entre ecuaciones
+    lineas_finales.append("")
+
+# Unir con saltos de línea estándar (\n) limpios y asegurar codificación UTF-8 pura
+texto_final = "\n".join(lineas_finales).strip()
 
 if texto_final:
     st.text_area("Vista previa del archivo (Formato POE):", value=texto_final, height=350, disabled=True)
     
+    # Corrección clave para POE: codificar explícitamente en bytes UTF-8 sin BOM
+    archivo_bytes = texto_final.encode('utf-8')
+
     st.download_button(
-        label="⬇️ Descargar archivo .txt",
-        data=texto_final,
+        label="⬇️ Descargar archivo .txt compatible con POE",
+        data=archivo_bytes,
         file_name="sistema_poe.txt",
         mime="text/plain"
     )
