@@ -1,111 +1,184 @@
 import streamlit as st
+import re
 
 # Configuración de la página
 st.set_page_config(page_title="Generador Archivos POE", layout="centered")
 
-# 1. Inicializar el estado de la sesión para guardar datos
+# 1. Inicializar el estado de la sesión
 if 'ecuaciones' not in st.session_state:
     st.session_state.ecuaciones = []
 if 'variables_actuales' not in st.session_state:
     st.session_state.variables_actuales = []
 
-st.title("Generador de Archivos para POE")
-st.write("Agrega tus ecuaciones e incógnitas. Las variables repetidas en distintas ecuaciones se guardarán correctamente.")
+# Diccionario global de pesos
+opciones_peso = {
+    1: "1 (Fácil de despejar)", 2: "2", 3: "3", 4: "4", 5: "5",
+    6: "6", 7: "7", 8: "8", 9: "9", 10: "10 (Muy complicado)"
+}
+
+st.title("Generador Avanzado POE")
+st.write("Procesa ecuaciones automáticamente o cárgalas de forma manual. Edita pesos y variables antes de exportar.")
 st.write("---")
 
-st.subheader("1. Armar Ecuación")
+# ==========================================
+# SECCIÓN 1: CARGA AUTOMÁTICA (NUEVO)
+# ==========================================
+st.subheader("🤖 1. Carga Automática (Desde Texto)")
+st.info("Copia y pega tus ecuaciones y tus datos. El sistema cruzará la información y extraerá solo las incógnitas con peso 1 por defecto.")
 
-# Input para el nombre de la ecuación. Al estar fuera del form, no se borra.
-nombre_eq = st.text_input("Nombre de la ecuación (Ej: E1, E2):", key="nombre_eq")
+col_text1, col_text2 = st.columns(2)
+with col_text1:
+    texto_eqs = st.text_area("Pega tus ecuaciones (Ej: F10 * xb10 + F9 * xb9 = F11 * xb11 E2):", height=200)
+with col_text2:
+    texto_datos = st.text_area("Pega tus datos/constantes (Ej: F4=100, xd11=0.01, aa=0.5):", height=200)
 
-st.write("**Agregar incógnitas a esta ecuación:**")
+if st.button("⚡ Procesar Texto Automáticamente"):
+    if texto_eqs.strip():
+        # Extraer nombres de variables de los datos conocidos (letras seguidas de letras/números)
+        datos_conocidos = set(re.findall(r'\b[A-Za-z][A-Za-z0-9_]*\b', texto_datos))
+        
+        lineas = texto_eqs.split('\n')
+        agregadas = 0
+        
+        for linea in lineas:
+            linea = linea.strip()
+            if not linea: continue
+            
+            # Buscar el nombre de la ecuación (Ej: E1, E12)
+            match_nombre = re.search(r'\bE\d+\b', linea)
+            nombre_eq = match_nombre.group() if match_nombre else f"Eq_{len(st.session_state.ecuaciones)+1}"
+            
+            # Limpiar la E de la ecuación para no contarla como variable
+            linea_limpia = re.sub(r'\bE\d+\b', '', linea)
+            
+            # Encontrar todas las variables puras en la ecuación
+            vars_en_linea = set(re.findall(r'\b[A-Za-z][A-Za-z0-9_]*\b', linea_limpia))
+            
+            # CRUZAR: Restar los datos fijos para dejar solo las incógnitas reales
+            incognitas = vars_en_linea - datos_conocidos
+            
+            # CHECK DE INDEPENDENCIA BÁSICA: Si no hay incógnitas, la descarta.
+            if not incognitas:
+                st.warning(f"⚠️ Ecuación ignorada: **{nombre_eq}**. No posee incógnitas libres (está completamente definida por los datos fijos).")
+                continue
+            
+            # Guardar la ecuación con las incógnitas resultantes a peso 1
+            vars_a_guardar = [{"nombre": v, "peso": 1} for v in incognitas]
+            st.session_state.ecuaciones.append({
+                "nombre": nombre_eq,
+                "variables": vars_a_guardar
+            })
+            agregadas += 1
+            
+        if agregadas > 0:
+            st.success(f"✅ Se procesaron e integraron {agregadas} ecuaciones al sistema.")
+    else:
+        st.error("Debes ingresar ecuaciones para procesar.")
 
-# Usamos st.form para que al agregar una variable, la caja de texto se limpie automáticamente
+st.write("---")
+
+# ==========================================
+# SECCIÓN 2: CARGA MANUAL (EXISTENTE)
+# ==========================================
+st.subheader("✍️ 2. Carga Manual")
+
+nombre_eq_manual = st.text_input("Nombre de la ecuación (Ej: E1):", key="nombre_eq")
+
 with st.form("formulario_variables", clear_on_submit=True):
     col1, col2 = st.columns(2)
     with col1:
-        opciones_peso = {
-            1: "1 (Fácil de despejar)", 2: "2", 3: "3", 4: "4", 5: "5",
-            6: "6", 7: "7", 8: "8", 9: "9", 10: "10 (Muy complicado)"
-        }
-        peso = st.selectbox(
-            "Peso de la incógnita:", 
-            options=list(opciones_peso.keys()), 
-            format_func=lambda x: opciones_peso[x]
-        )
+        peso = st.selectbox("Peso de la incógnita:", options=list(opciones_peso.keys()), format_func=lambda x: opciones_peso[x])
     with col2:
-        nombre_var = st.text_input("Variable/Incógnita (Ej: F3, F2):")
+        nombre_var = st.text_input("Variable/Incógnita (Ej: F3):")
 
-    # Botón de envío del formulario
     btn_agregar = st.form_submit_button("➕ Agregar Variable")
     
     if btn_agregar:
         if nombre_var.strip():
-            # Guarda la variable sin importar si ya existe (permite repeticiones)
             st.session_state.variables_actuales.append({"peso": peso, "nombre": nombre_var.strip()})
-            st.success(f"Variable '{nombre_var.strip()}' agregada a la lista temporal.")
-            st.rerun() # Fuerza a recargar para mostrar la variable abajo inmediatamente
+            st.success(f"Variable '{nombre_var.strip()}' en lista temporal.")
+            st.rerun()
         else:
-            st.warning("Debes ingresar un nombre para la variable.")
+            st.warning("Debes ingresar un nombre.")
 
-# Mostrar las variables que se van agregando a la ecuación actual y permitir borrarlas
 if st.session_state.variables_actuales:
-    st.info("**Variables listas para guardar en la ecuación:**")
+    st.info("**Variables temporales:**")
     for i, v in enumerate(st.session_state.variables_actuales):
         colA, colB = st.columns([0.85, 0.15])
         colA.write(f"- Peso: {v['peso']} | Variable: **{v['nombre']}**")
-        # Botón para borrar esta variable específica
-        if colB.button("❌ Borrar", key=f"del_var_{i}", help="Eliminar esta variable de la ecuación actual"):
+        if colB.button("❌", key=f"del_tmp_{i}"):
             st.session_state.variables_actuales.pop(i)
             st.rerun()
 
-st.write("")
-# Botón para confirmar y guardar la ecuación completa en el sistema
-if st.button("💾 Guardar Ecuación Completa"):
-    if nombre_eq.strip() and st.session_state.variables_actuales:
-        # Guardar en la lista principal
+if st.button("💾 Guardar Ecuación Manual"):
+    if nombre_eq_manual.strip() and st.session_state.variables_actuales:
         st.session_state.ecuaciones.append({
-            "nombre": nombre_eq.strip(),
+            "nombre": nombre_eq_manual.strip(),
             "variables": st.session_state.variables_actuales.copy()
         })
-        # Limpiar SOLO las variables actuales para empezar la siguiente ecuación
         st.session_state.variables_actuales = []
-        st.success(f"Ecuación '{nombre_eq.strip()}' guardada en el sistema. Puedes cambiar el nombre arriba y seguir agregando.")
         st.rerun()
     else:
-        st.error("Falta el nombre de la ecuación o no has agregado ninguna variable a la lista.")
+        st.error("Falta nombre o variables.")
 
 st.write("---")
-st.subheader("2. Sistema Generado y Descarga")
 
-# Mostrar las ecuaciones guardadas y permitir borrarlas individualmente
+# ==========================================
+# SECCIÓN 3: EDICIÓN DINÁMICA Y DESCARGA
+# ==========================================
+st.subheader("⚙️ 3. Sistema Generado y Edición")
+
 if st.session_state.ecuaciones:
-    st.write("**Ecuaciones confirmadas en el sistema:**")
+    st.write("**Panel de Control:** Aquí puedes cambiar el peso de cualquier variable o eliminar elementos.")
+    
+    # Mostrar cada ecuación en un desplegable para mantenerlo ordenado
     for i, ec in enumerate(st.session_state.ecuaciones):
-        col_eq1, col_eq2 = st.columns([0.85, 0.15])
-        # Muestra el nombre de la ec y un resumen de sus variables
-        nombres_vars = ", ".join([v['nombre'] for v in ec['variables']])
-        col_eq1.write(f"**{ec['nombre']}** *(Variables: {nombres_vars})*")
-        
-        # Botón para borrar toda la ecuación
-        if col_eq2.button("❌ Borrar", key=f"del_eq_{i}", help="Eliminar esta ecuación completa del sistema"):
-            st.session_state.ecuaciones.pop(i)
-            st.rerun()
+        with st.expander(f"📦 {ec['nombre']} (Ver/Editar Variables)"):
+            # Botón para borrar toda la ecuación
+            if st.button(f"🗑️ Eliminar Ecuación Completa {ec['nombre']}", key=f"del_eq_{i}"):
+                st.session_state.ecuaciones.pop(i)
+                st.rerun()
+            
+            st.write("---")
+            # Iterar sobre las variables de esa ecuación
+            for j, var in enumerate(ec['variables']):
+                col_var_name, col_var_peso, col_var_del = st.columns([0.4, 0.4, 0.2])
+                
+                col_var_name.write(f"**{var['nombre']}**")
+                
+                # Desplegable para editar el peso dinámicamente
+                nuevo_peso = col_var_peso.selectbox(
+                    "Peso:", 
+                    options=list(opciones_peso.keys()), 
+                    format_func=lambda x: opciones_peso[x],
+                    index=list(opciones_peso.keys()).index(var['peso']),
+                    key=f"edit_peso_{i}_{j}"
+                )
+                
+                # Actualizar el peso en la base de datos de la sesión
+                if nuevo_peso != var['peso']:
+                    st.session_state.ecuaciones[i]['variables'][j]['peso'] = nuevo_peso
+                
+                # Botón para borrar la variable de esta ecuación particular
+                if col_var_del.button("❌ Quitar", key=f"del_var_{i}_{j}"):
+                    st.session_state.ecuaciones[i]['variables'].pop(j)
+                    st.rerun()
 
 st.write("")
 
-# Lógica para formatear el texto exactamente como pide el POE (Estilo Windows)
+# Lógica para formatear el texto a POE
 texto_final = ""
 for i, ec in enumerate(st.session_state.ecuaciones):
+    # Si la ecuación se quedó vacía porque le borraste todas las variables, se ignora
+    if not ec['variables']: continue
+    
     texto_final += f"{ec['nombre']}\r\n"
     for var in ec['variables']:
         texto_final += f"{var['peso']} {var['nombre']}\r\n"
     
-    # Agrega el renglón en blanco SOLO si no es la última ecuación de la lista
     if i < len(st.session_state.ecuaciones) - 1:
         texto_final += "\r\n"
 
-# Mostrar vista previa y botón de descarga si hay datos
 if texto_final:
     st.text_area("Vista previa del archivo (Formato POE):", value=texto_final, height=350, disabled=True)
     
